@@ -1,0 +1,14 @@
+{
+  "name": "GunMover",
+  "version-string": "1.0.0",
+  "description": "Moves the gun in first person view.",
+  "homepage": "https://github.com/jarari/GunMover",
+  "license": "MIT",
+  "dependencies": [
+    "boost-iostreams",
+    "boost-iterator",
+    "boost-predef",
+    "boost-stl-interfaces",
+    "spdlog"
+  ]
+}

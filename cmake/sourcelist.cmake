@@ -1,0 +1,25 @@
+set(SOURCES
+	src/PCH.h
+	src/Configs.cpp
+	src/Configs.h
+	src/EditorUI.cpp
+	src/EditorUI.h
+	src/EquipWatcher.cpp
+	src/EquipWatcher.h
+	src/Globals.cpp
+	src/Globals.h
+	src/Hooks.cpp
+	src/Hooks.h
+	src/main.cpp
+	src/MenuWatcher.cpp
+	src/MenuWatcher.h
+	src/Utils.cpp
+	src/Utils.h
+	src/imgui/imgui.cpp
+	src/imgui/imgui_demo.cpp
+	src/imgui/imgui_draw.cpp
+	src/imgui/imgui_impl_dx11.cpp
+	src/imgui/imgui_impl_win32.cpp
+	src/imgui/imgui_tables.cpp
+	src/imgui/imgui_widgets.cpp
+)
