@@ -86,7 +86,7 @@ void Hooks::HookedSet1stPersonCameraLocation(RE::NiPoint3& a_loc)
 			if (equipped.size() != 0 && equipped[0].data.get()) {
 				RE::EquippedWeaponData* weapData = static_cast<RE::EquippedWeaponData*>(equipped[0].data.get());
 				if (weapData->fireNode) {
-					fireNode = weapData->fireNode->IsNode();
+					fireNode = static_cast<RE::NiNode*>(weapData->fireNode);
 				}
 			}
 			Globals::p->currentProcess->middleHigh->equippedItemsLock.unlock();
