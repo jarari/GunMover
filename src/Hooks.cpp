@@ -3,6 +3,7 @@
 #include "EquipWatcher.h"
 #include "MenuWatcher.h"
 #include "Configs.h"
+#include "EditorUI.h"
 #include "include/detours.h"
 #include "Utils.h"
 
@@ -19,8 +20,14 @@ static RE::NiMatrix3 adjustRotMat;
 bool Hooks::shouldAdjust = false;
 RE::NiPoint3 Hooks::cachedProjectileNodeLocal;
 
+float easePercentage = 1.f, currentTime = 0.f, duration = 0.f;
+std::string clipName;
+std::string animationInfo;
+RE::NiPoint3 adjustDiff;
+
 void Hooks::InitializeHooks()
 {
+	animationInfo.reserve(1024);
 	Globals::ui->GetEventSource<RE::MenuOpenCloseEvent>()->RegisterSink(MenuWatcher::GetSingleton());
 	RE::EquipEventSource::GetSingleton()->RegisterSink(EquipWatcher::GetSingleton());
 
@@ -69,7 +76,7 @@ namespace RE
 		const char* animPath;                     // 90
 	};
 }
-void GetClipInfo(float& currentTime, float& duration, std::string& clipName) {
+void GetClipInfo(float& _currentTime, float& _duration, std::string& _clipName) {
 	if (Globals::p->currentProcess) {
 		RE::BSAnimationGraphManager* graphManager = Globals::p->currentProcess->middleHigh->animationGraphManager.get();
 		if (graphManager) {
@@ -84,9 +91,9 @@ void GetClipInfo(float& currentTime, float& duration, std::string& clipName) {
 							if (animCtrl) {
 								uintptr_t animBinding = *(uintptr_t*)(animCtrl + 0x38);
 								uintptr_t anim = *(uintptr_t*)(animBinding + 0x18);
-								currentTime = *(float*)(clip + 0x140);
-								clipName = std::string(*(const char**)(clip + 0x38));
-								duration = *(float*)(anim + 0x14);
+								_currentTime = *(float*)(clip + 0x140);
+								_duration = *(float*)(anim + 0x14);
+								_clipName = std::string(*(const char**)(clip + 0x38));
 								return;
 							}
 						}
@@ -105,7 +112,6 @@ void GetAllClipInfo(std::string& clipInfo)
 			if (graph) {
 				RE::hkbBehaviorGraph* hkGraph = *(RE::hkbBehaviorGraph**)((uintptr_t)graph + 0x378);
 				if (hkGraph->activeNodes && hkGraph->activeNodes->_size > 0 && !hkGraph->updateActiveNodes && !hkGraph->stateOrTransitionChanged) {
-					clipInfo.reserve(1024);
 					for (int i = 0; i < hkGraph->activeNodes->_size; ++i) {
 						if (hkGraph->activeNodes->_data[i]->clipGenerator && (*(uintptr_t*)hkGraph->activeNodes->_data[i]->clipGenerator) == RE::VTABLE::hkbClipGenerator[0].address()) {
 							uintptr_t clip = (uintptr_t)(hkGraph->activeNodes->_data[i]->clipGenerator);
@@ -122,10 +128,6 @@ void GetAllClipInfo(std::string& clipInfo)
 	}
 }
 
-float easePercentage = 1.f, currentTime = 0.f, duration = 0.f;
-std::string clipName;
-std::string animationInfo;
-RE::NiPoint3 adjustDiff;
 void Hooks::HookedSet1stPersonCameraLocation(RE::NiPoint3& a_loc)
 {
 	if (shouldAdjust && Configs::adjustment) {
@@ -166,8 +168,10 @@ void Hooks::HookedSet1stPersonCameraLocation(RE::NiPoint3& a_loc)
 
 		currentTime = 0.f, duration = 0.f;
 		GetClipInfo(currentTime, duration, clipName);
-		animationInfo = "";
-		GetAllClipInfo(animationInfo);
+		if (EditorUI::Window::GetSingleton()->GetShouldDraw()) {
+			animationInfo.clear();
+			GetAllClipInfo(animationInfo);
+		}
 		if (MenuWatcher::GetSingleton()->isInPipboyMenu || 
 			(Globals::p->currentProcess && Globals::p->currentProcess->middleHigh->weaponCullCounter > 0) ||
 			(Configs::adjustment->GetAdjustmentFlag(Configs::REVERT_FLAG::kRevertOnReload) && Globals::p->gunState == RE::GUN_STATE::kReloading && (duration - currentTime) >= duration / 3.f) ||
@@ -185,13 +189,13 @@ void Hooks::HookedSet1stPersonCameraLocation(RE::NiPoint3& a_loc)
 
 		float adjustPercentage = 0.f;
 		if (zoomPercentage > 0.f || transitionTimer > 0.f) {
-			adjustPercentage = min(1.f - zoomPercentage, 1.f - transitionTimer / transitionDelay);
+			adjustPercentage = min(1.f - zoomPercentage, Utils::easeInOutQuad(1.f - transitionTimer / transitionDelay));
 		} else {
 			adjustPercentage = 1.f;
 		}
 		easePercentage = 1.f;
 		if (adjustPercentage < 1.f) {
-			easePercentage = Utils::easeInOutQuad(adjustPercentage);
+			easePercentage = adjustPercentage;
 			adjustWorld = adjustWorld * easePercentage;
 			adjustRot = adjustRot * easePercentage;
 		}
