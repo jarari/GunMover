@@ -80,12 +80,12 @@ void GetClipInfo(float& currentTime, float& duration, std::string& clipName) {
 					for (int i = 0; i < hkGraph->activeNodes->_size; ++i) {
 						if (hkGraph->activeNodes->_data[i]->clipGenerator2 && (*(uintptr_t*)hkGraph->activeNodes->_data[i]->clipGenerator2) == RE::VTABLE::hkbClipGenerator[0].address()) {
 							uintptr_t clip = (uintptr_t)(hkGraph->activeNodes->_data[i]->clipGenerator2);
-							currentTime = *(float*)(clip + 0x140);
-							clipName = std::string(*(const char**)(clip + 0x38));
 							uintptr_t animCtrl = *(uintptr_t*)(clip + 0xD0);
 							if (animCtrl) {
 								uintptr_t animBinding = *(uintptr_t*)(animCtrl + 0x38);
 								uintptr_t anim = *(uintptr_t*)(animBinding + 0x18);
+								currentTime = *(float*)(clip + 0x140);
+								clipName = std::string(*(const char**)(clip + 0x38));
 								duration = *(float*)(anim + 0x14);
 								return;
 							}
@@ -105,12 +105,15 @@ void GetAllClipInfo(std::string& clipInfo)
 			if (graph) {
 				RE::hkbBehaviorGraph* hkGraph = *(RE::hkbBehaviorGraph**)((uintptr_t)graph + 0x378);
 				if (hkGraph->activeNodes && hkGraph->activeNodes->_size > 0 && !hkGraph->updateActiveNodes && !hkGraph->stateOrTransitionChanged) {
+					clipInfo.reserve(1024);
 					for (int i = 0; i < hkGraph->activeNodes->_size; ++i) {
 						if (hkGraph->activeNodes->_data[i]->clipGenerator && (*(uintptr_t*)hkGraph->activeNodes->_data[i]->clipGenerator) == RE::VTABLE::hkbClipGenerator[0].address()) {
 							uintptr_t clip = (uintptr_t)(hkGraph->activeNodes->_data[i]->clipGenerator);
-							clipInfo += "Clip: ";
-							clipInfo += std::string(*(const char**)(clip + 0x38)) + "\n";
-							clipInfo += std::string(*(const char**)(clip + 0x90)) + "\n";
+							clipInfo.append("Clip: ");
+							clipInfo.append(*(const char**)(clip + 0x38));
+							clipInfo.append("\n");
+							clipInfo.append(*(const char**)(clip + 0x90));
+							clipInfo.append("\n");
 						}
 					}
 				}
