@@ -34,7 +34,40 @@ void Hooks::InitializeHooks()
 
 namespace RE
 {
-	class hkbBehaviorGraph;
+	struct hkbBehaviorGraph
+	{
+		struct NodeData
+		{
+			hkbClipGenerator* clipGenerator;   // 00
+			hkbClipGenerator* clipGenerator2;  // 08
+			hkbBehaviorGraph* behaviorGraph;   // 10
+		};
+
+		// members
+		std::uint64_t unk00[0xE0 >> 3];            // 000
+		hkArray<NodeData*>* activeNodes;           // 0E0
+		std::uint64_t unkE8[(0x1A8 - 0xE8) >> 3];  // 0E8
+		std::uint8_t unk1A8;                       // 1A8
+		std::uint8_t unk1A9;                       // 1A9
+		bool isActive;                             // 1AA
+		bool isLinked;                             // 1AB
+		bool updateActiveNodes;                    // 1AC
+		bool stateOrTransitionChanged;             // 1AD
+	};
+
+	class hkbClipGenerator
+	{
+	public:
+		// members
+		std::uint64_t unk00[0x38 >> 3];           // 00
+		const char* animName;                     // 38
+		std::uint32_t id;						  // 40
+		std::uint8_t cloneState;                  // 42
+		std::uint8_t pad43;                       // 43
+		std::uint32_t pad44;                      // 44
+		std::uint64_t unk40[(0x90 - 0x48) >> 3];  // 40
+		const char* animPath;                     // 90
+	};
 }
 void GetClipInfo(float& currentTime, float& duration, std::string& clipName) {
 	if (Globals::p->currentProcess) {
@@ -43,26 +76,42 @@ void GetClipInfo(float& currentTime, float& duration, std::string& clipName) {
 			RE::BShkbAnimationGraph* graph = graphManager->variableCache.graphToCacheFor.get();
 			if (graph) {
 				RE::hkbBehaviorGraph* hkGraph = *(RE::hkbBehaviorGraph**)((uintptr_t)graph + 0x378);
-				typedef RE::hkArray<void**, struct hkContainerHeapAllocator> nodeArray;
-				nodeArray* activeNodes = *(nodeArray**)((uintptr_t)hkGraph + 0xE0);
-				if (activeNodes && activeNodes->_size > 0) {
-					void** generatorArray = *activeNodes->_data;
-					while (*generatorArray) {
-						uintptr_t clip = (uintptr_t)(*generatorArray);
-						if (*(uint32_t*)(clip + 0x8)) {
+				if (hkGraph->activeNodes && hkGraph->activeNodes->_size > 0 && !hkGraph->updateActiveNodes && !hkGraph->stateOrTransitionChanged) {
+					for (int i = 0; i < hkGraph->activeNodes->_size; ++i) {
+						if (hkGraph->activeNodes->_data[i]->clipGenerator2 && (*(uintptr_t*)hkGraph->activeNodes->_data[i]->clipGenerator2) == RE::VTABLE::hkbClipGenerator[0].address()) {
+							uintptr_t clip = (uintptr_t)(hkGraph->activeNodes->_data[i]->clipGenerator2);
 							currentTime = *(float*)(clip + 0x140);
 							clipName = std::string(*(const char**)(clip + 0x38));
-							if (currentTime) {
-								uintptr_t animCtrl = *(uintptr_t*)(clip + 0xD0);
-								if (animCtrl) {
-									uintptr_t animBinding = *(uintptr_t*)(animCtrl + 0x38);
-									uintptr_t anim = *(uintptr_t*)(animBinding + 0x18);
-									duration = *(float*)(anim + 0x14);
-									return;
-								}
+							uintptr_t animCtrl = *(uintptr_t*)(clip + 0xD0);
+							if (animCtrl) {
+								uintptr_t animBinding = *(uintptr_t*)(animCtrl + 0x38);
+								uintptr_t anim = *(uintptr_t*)(animBinding + 0x18);
+								duration = *(float*)(anim + 0x14);
+								return;
 							}
 						}
-						generatorArray = (void**)((uintptr_t)generatorArray + 0x8);
+					}
+				}
+			}
+		}
+	}
+}
+void GetAllClipInfo(std::string& clipInfo)
+{
+	if (Globals::p->currentProcess) {
+		RE::BSAnimationGraphManager* graphManager = Globals::p->currentProcess->middleHigh->animationGraphManager.get();
+		if (graphManager) {
+			RE::BShkbAnimationGraph* graph = graphManager->variableCache.graphToCacheFor.get();
+			if (graph) {
+				RE::hkbBehaviorGraph* hkGraph = *(RE::hkbBehaviorGraph**)((uintptr_t)graph + 0x378);
+				if (hkGraph->activeNodes && hkGraph->activeNodes->_size > 0 && !hkGraph->updateActiveNodes && !hkGraph->stateOrTransitionChanged) {
+					for (int i = 0; i < hkGraph->activeNodes->_size; ++i) {
+						if (hkGraph->activeNodes->_data[i]->clipGenerator && (*(uintptr_t*)hkGraph->activeNodes->_data[i]->clipGenerator) == RE::VTABLE::hkbClipGenerator[0].address()) {
+							uintptr_t clip = (uintptr_t)(hkGraph->activeNodes->_data[i]->clipGenerator);
+							clipInfo += "Clip: ";
+							clipInfo += std::string(*(const char**)(clip + 0x38)) + "\n";
+							clipInfo += std::string(*(const char**)(clip + 0x90)) + "\n";
+						}
 					}
 				}
 			}
@@ -72,6 +121,7 @@ void GetClipInfo(float& currentTime, float& duration, std::string& clipName) {
 
 float easePercentage = 1.f, currentTime = 0.f, duration = 0.f;
 std::string clipName;
+std::string animationInfo;
 RE::NiPoint3 adjustDiff;
 void Hooks::HookedSet1stPersonCameraLocation(RE::NiPoint3& a_loc)
 {
@@ -113,6 +163,8 @@ void Hooks::HookedSet1stPersonCameraLocation(RE::NiPoint3& a_loc)
 
 		currentTime = 0.f, duration = 0.f;
 		GetClipInfo(currentTime, duration, clipName);
+		animationInfo = "";
+		GetAllClipInfo(animationInfo);
 		if (MenuWatcher::GetSingleton()->isInPipboyMenu || 
 			(Globals::p->currentProcess && Globals::p->currentProcess->middleHigh->weaponCullCounter > 0) ||
 			(Configs::adjustment->GetAdjustmentFlag(Configs::REVERT_FLAG::kRevertOnReload) && Globals::p->gunState == RE::GUN_STATE::kReloading && (duration - currentTime) >= duration / 3.f) ||

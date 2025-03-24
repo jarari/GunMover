@@ -20,7 +20,7 @@ std::string iniSection = "GMHotkey";
 extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND a_hWnd, UINT a_msg, WPARAM a_wParam, LPARAM a_lParam);
 
 extern float easePercentage, currentTime, duration;
-extern std::string clipName;
+extern std::string clipName, animationInfo;
 
 namespace EditorUI
 {
@@ -369,9 +369,9 @@ namespace EditorUI
 
 	void Window::ToggleEditorUI()
 	{
-		this->shouldDraw = !this->shouldDraw;
-		::ShowCursor(this->shouldDraw);
-		if (this->shouldDraw) {
+		bool wantDraw = !this->shouldDraw;
+		::ShowCursor(wantDraw);
+		if (wantDraw) {
 			Hooks::shouldAdjust = true;
 			if (!Configs::adjustment) {
 				Configs::adjustDataMap.at(0xFFFFFFFF).at(0xFFFFFFFF) = Configs::AdjustmentData();
@@ -379,6 +379,7 @@ namespace EditorUI
 			}
 			SyncValues();
 		}
+		this->shouldDraw = wantDraw;
 	}
 
 	// Function to copy text to the clipboard on Windows
@@ -610,6 +611,9 @@ namespace EditorUI
 		ImGui::SeparatorText("Debug");
 		if (Globals::p)
 			ImGui::TextColored(ImVec4(0.95f, 0.f, 0.f, 1.f), "currentTime %.2f duration %.2f easePercentage %.2f\nGunState %d WeaponState %d\nClip Name %s", currentTime, duration, easePercentage, Globals::p->gunState, Globals::p->weaponState, clipName.c_str());
+		ImGui::SeparatorText("Animation");
+		if (Globals::p)
+			ImGui::TextColored(ImVec4(0.95f, 0.f, 0.f, 1.f), "%s", animationInfo.c_str());
 
 		ImGui::End();
 	}
