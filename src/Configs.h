@@ -71,5 +71,4 @@ namespace Configs
 	void LoadConfigs();
 	void RegisterAdjustmentData(auto, uint32_t, uint32_t, bool isKeyword = false);
 	void SetAdjustmentForEquipped();
-	void ClearAdjustments();
 }

@@ -513,11 +513,12 @@ namespace EditorUI
 				Globals::p->currentProcess->middleHigh->equippedItemsLock.unlock();
 				if (objInstance) {
 					RE::BGSObjectInstance newObjInstance { objInstance->object, nullptr };
-					RE::ActorEquipManager::GetSingleton()->UnequipObject(Globals::p, objInstance, 1, 0, 0xFFFFFFFF, false, false, false, false, 0);
-					RE::ActorEquipManager::GetSingleton()->EquipObject(Globals::p, newObjInstance, 0, 1, 0, true, false, false, false, false);
+					RE::ActorEquipManager::GetSingleton()->UnequipObject(Globals::p, objInstance, 1, 0, 0xFFFFFFFF, false, false, false, true, 0);
+					RE::ActorEquipManager::GetSingleton()->EquipObject(Globals::p, newObjInstance, 0, 1, 0, true, false, false, true, false);
 				}
 			}
 
+			SyncValues();
 			Hooks::shouldAdjust = true;
 		}
 

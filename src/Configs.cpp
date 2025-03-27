@@ -5,15 +5,17 @@
 #include <unordered_set>
 #include <Globals.h>
 #include <Hooks.h>
+#include <EditorUI.h>
 
 Configs::AdjustmentDataMap Configs::adjustDataMap;
 Configs::AdjustmentData* Configs::adjustment = nullptr;
 
 void Configs::LoadConfigs()
 {
-	ClearAdjustments();
+	Hooks::shouldAdjust = false;
 	adjustDataMap.clear();
 	adjustDataMap.insert({ 0xFFFFFFFF, { std::pair(0xFFFFFFFF, AdjustmentData()) } });
+	adjustment = &adjustDataMap.at(0xFFFFFFFF).at(0xFFFFFFFF);
 	namespace fs = std::filesystem;
 	fs::path jsonPath = fs::current_path();
 	jsonPath += "\\Data\\F4SE\\Plugins\\GunMover";
@@ -191,8 +193,10 @@ void Configs::SetAdjustmentForEquipped()
 		return;
 
 	// Reset adjustment
-	adjustment = nullptr;
-	Hooks::shouldAdjust = false;
+	adjustment = &adjustDataMap.at(0xFFFFFFFF).at(0xFFFFFFFF);
+	if (!EditorUI::Window::GetSingleton()->GetShouldDraw()) {
+		Hooks::shouldAdjust = false;
+	}
 	Hooks::cachedProjectileNodeLocal.x = FLT_MAX;
 
 	// Check if inventoryList is valid
@@ -267,12 +271,6 @@ void Configs::SetAdjustmentForEquipped()
 			}
 		}
 	}
-}
-
-void Configs::ClearAdjustments()
-{
-	adjustment = nullptr;
-	Hooks::shouldAdjust = false;
 }
 
 void Configs::AdjustmentData::CycleAlternatives()
