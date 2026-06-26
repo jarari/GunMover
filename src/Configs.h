@@ -35,6 +35,7 @@ namespace Configs
 		RE::NiPoint3 rotation;
 		std::bitset<(size_t)REVERT_FLAG::kNumFlags> revertFlag;
 		std::queue<AlternativeAdjustment> alternatives;
+		int priority = 0;
 		float transitionTimer = 0.f;
 		bool isInTransition = false;
 		AdjustmentData()
@@ -47,8 +48,8 @@ namespace Configs
 			}
 		}
 
-		AdjustmentData(float x, float y, float z, float rotX, float rotY, float rotZ, const std::bitset<(size_t)REVERT_FLAG::kNumFlags>& _revertFlag, const std::queue<AlternativeAdjustment>& _alternatives) :
-			translation(x, y, z), rotation(rotX * toRad, rotY * toRad, rotZ * toRad), revertFlag(_revertFlag), alternatives(_alternatives) {}
+		AdjustmentData(float x, float y, float z, float rotX, float rotY, float rotZ, const std::bitset<(size_t)REVERT_FLAG::kNumFlags>& _revertFlag, const std::queue<AlternativeAdjustment>& _alternatives, int _priority) :
+			translation(x, y, z), rotation(rotX * toRad, rotY * toRad, rotZ * toRad), revertFlag(_revertFlag), alternatives(_alternatives), priority(_priority) {}
 
 		void SetAdjustmentFlag(REVERT_FLAG flagIndex, bool set)
 		{

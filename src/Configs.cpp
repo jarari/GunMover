@@ -101,6 +101,7 @@ void Configs::LoadConfigs()
 void Configs::RegisterAdjustmentData(auto a_iter, uint32_t wepFormID, uint32_t omodFormID, bool isKeyword)
 {
 	float x = 0, y = 0, z = 0, rotX = 0, rotY = 0, rotZ = 0;
+	int priority = 0;
 	std::bitset<(size_t)REVERT_FLAG::kNumFlags> revertFlags;
 	std::queue<AlternativeAdjustment> alternatives;
 
@@ -118,6 +119,8 @@ void Configs::RegisterAdjustmentData(auto a_iter, uint32_t wepFormID, uint32_t o
 			rotY = adjustData.value().get<float>();
 		} else if (adjustData.key() == "rotZ") {
 			rotZ = adjustData.value().get<float>();
+		} else if (adjustData.key() == "Priority") {
+			priority = adjustData.value().get<int>();
 		} else if (adjustData.key() == "RevertOnReload") {
 			revertFlags.set((size_t)REVERT_FLAG::kRevertOnReload, adjustData.value().get<bool>());
 		} else if (adjustData.key() == "RevertOnMelee") {
@@ -176,11 +179,11 @@ void Configs::RegisterAdjustmentData(auto a_iter, uint32_t wepFormID, uint32_t o
 			typeStr = "Keyword";
 		// Check if the OMOD exists, insert if not, else overwrite
 		if (omodExistit == omodMap.end()) {
-			omodMap.insert({ omodFormID, AdjustmentData(x, y, z, rotX, rotY, rotZ, revertFlags, alternatives) });
-			logger::info("Added Weapon {:04X} - {} {:04X} with adjustment data (X: {:.2f}, Y: {:.2f}, Z: {:.2f}, rotX: {:.2f}, rotY: {:.2f}, rotZ: {:.2f}, RevertFlags: {}, Alternatives: {})", wepFormID, typeStr.c_str(), omodFormID, x, y, z, rotX, rotY, rotZ, revertFlags.to_string(), alternatives.size());
+			omodMap.insert({ omodFormID, AdjustmentData(x, y, z, rotX, rotY, rotZ, revertFlags, alternatives, priority) });
+			logger::info("Added Weapon {:04X} - {} {:04X} with adjustment data (Priority: {}, X: {:.2f}, Y: {:.2f}, Z: {:.2f}, rotX: {:.2f}, rotY: {:.2f}, rotZ: {:.2f}, RevertFlags: {}, Alternatives: {})", wepFormID, typeStr.c_str(), omodFormID, priority, x, y, z, rotX, rotY, rotZ, revertFlags.to_string(), alternatives.size());
 		} else {
-			omodExistit->second = AdjustmentData(x, y, z, rotX, rotY, rotZ, revertFlags, alternatives);
-			logger::info("Duplicate {} data found for Weapon {:04X} - {} {:04X}. Overwriting with new adjustment data (X: {:.2f}, Y: {:.2f}, Z: {:.2f}, rotX: {:.2f}, rotY: {:.2f}, rotZ: {:.2f}, RevertFlags: {}, Alternatives: {})", typeStr.c_str(), wepFormID, typeStr.c_str(), omodFormID, x, y, z, rotX, rotY, rotZ, revertFlags.to_string(), alternatives.size());
+			omodExistit->second = AdjustmentData(x, y, z, rotX, rotY, rotZ, revertFlags, alternatives, priority);
+			logger::info("Duplicate {} data found for Weapon {:04X} - {} {:04X}. Overwriting with new adjustment data (Priority: {}, X: {:.2f}, Y: {:.2f}, Z: {:.2f}, rotX: {:.2f}, rotY: {:.2f}, rotZ: {:.2f}, RevertFlags: {}, Alternatives: {})", typeStr.c_str(), wepFormID, typeStr.c_str(), omodFormID, priority, x, y, z, rotX, rotY, rotZ, revertFlags.to_string(), alternatives.size());
 		}
 	} else {
 		logger::error("Insertion failed for Weapon {:04X}", wepFormID);
@@ -215,23 +218,33 @@ void Configs::SetAdjustmentForEquipped()
 			// Check if weapon exists in the adjustment map
 			if (wepIt != adjustDataMap.end()) {
 				auto instanceData = static_cast<RE::TESObjectWEAP::InstanceData*>(invItem.GetInstanceData(0));
-				bool keywordFound = false;
+				AdjustmentData* bestAdjustment = nullptr;
+				uint32_t bestFormID = 0;
+				std::string_view bestType = "";
+				bool foundAdjustment = false;
+
+				auto tryAdjustment = [&](uint32_t formID, std::string_view type) {
+					auto it = wepIt->second.find(formID);
+					if (it != wepIt->second.end() && (!foundAdjustment || it->second.priority > bestAdjustment->priority)) {
+						bestAdjustment = &it->second;
+						bestFormID = formID;
+						bestType = type;
+						foundAdjustment = true;
+					}
+				};
+
 				if (instanceData && instanceData->keywords) {
 					for (uint32_t keywordIdx = 0; keywordIdx < instanceData->keywords->numKeywords; ++keywordIdx) {
 						uint32_t keywordFormID = instanceData->keywords->keywords[keywordIdx]->formID;
-						auto keywordIt = wepIt->second.find(keywordFormID);
-						if (keywordIt != wepIt->second.end()) {
-							adjustment = &keywordIt->second;
-							Hooks::shouldAdjust = true;
-							logger::info("Weapon {:04X} Keyword {:04X} x: {:.2f}, y: {:.2f}, z: {:.2f}, rotX: {:.2f}, rotY: {:.2f}, rotZ: {:.2f}",
-								wep->formID, keywordFormID, adjustment->translation.x, adjustment->translation.y, adjustment->translation.z, adjustment->rotation.x / Configs::toRad, adjustment->rotation.y / Configs::toRad, adjustment->rotation.z / Configs::toRad);
-							keywordFound = true;
-							break;  // Stop once we find the keyword
-						}
+						tryAdjustment(keywordFormID, "Keyword");
 					}
 				}
-				if (keywordFound) {
-					break;
+
+				if (wep->keywords) {
+					for (uint32_t keywordIdx = 0; keywordIdx < wep->numKeywords; ++keywordIdx) {
+						uint32_t keywordFormID = wep->keywords[keywordIdx]->formID;
+						tryAdjustment(keywordFormID, "BaseKeyword");
+					}
 				}
 
 				auto extra = invItem.stackData->extra;
@@ -242,31 +255,21 @@ void Configs::SetAdjustmentForEquipped()
 					// Ensure extra data exists and has values
 					if (extraData && extraData->values && extraData->values->buffer) {
 						uintptr_t buf = reinterpret_cast<uintptr_t>(extraData->values->buffer);
-						bool omodFound = false;
 
 						// Iterate over the buffer data to find OMOD
 						for (uint32_t i = 0; i < extraData->values->size / 0x8; ++i) {
 							uint32_t omodFormID = *reinterpret_cast<uint32_t*>(buf + i * 0x8);
-							auto omodIt = wepIt->second.find(omodFormID);
-
-							// If OMOD exists, set the adjustment data
-							if (omodIt != wepIt->second.end()) {
-								adjustment = &omodIt->second;
-								Hooks::shouldAdjust = true;
-								logger::info("Weapon {:04X} OMOD {:04X} x: {:.2f}, y: {:.2f}, z: {:.2f}, rotX: {:.2f}, rotY: {:.2f}, rotZ: {:.2f}", 
-									wep->formID, omodFormID, adjustment->translation.x, adjustment->translation.y, adjustment->translation.z, adjustment->rotation.x / Configs::toRad, adjustment->rotation.y / Configs::toRad, adjustment->rotation.z / Configs::toRad);
-								omodFound = true;
-								break;  // Stop once we find the OMOD
-							}
-						}
-
-						// Log warning if no OMOD found
-						if (!omodFound) {
-							logger::info("No matching OMOD found for weapon {:04X}", wep->formID);
-						} else {
-							break;
+							tryAdjustment(omodFormID, "OMOD");
 						}
 					}
+				}
+
+				if (foundAdjustment) {
+					adjustment = bestAdjustment;
+					Hooks::shouldAdjust = true;
+					logger::info("Weapon {:04X} {} {:04X} Priority {} x: {:.2f}, y: {:.2f}, z: {:.2f}, rotX: {:.2f}, rotY: {:.2f}, rotZ: {:.2f}",
+						wep->formID, bestType, bestFormID, adjustment->priority, adjustment->translation.x, adjustment->translation.y, adjustment->translation.z, adjustment->rotation.x / Configs::toRad, adjustment->rotation.y / Configs::toRad, adjustment->rotation.z / Configs::toRad);
+					break;
 				}
 			}
 		}
