@@ -25,7 +25,7 @@ F4SEPluginLoad(const F4SE::LoadInterface* a_f4se)
 		.log = true,
 		.logName = Version::PROJECT.data(),
 		.trampoline = true,
-		.trampolineSize = 14,
+		.trampolineSize = 1024,
 	});
 
 	EditorUI::HookD3D11();

@@ -21,6 +21,7 @@ extern IMGUI_IMPL_API LRESULT ImGui_ImplWin32_WndProcHandler(HWND a_hWnd, UINT a
 
 extern float easePercentage, currentTime, duration;
 extern std::string clipName, animationInfo;
+void GetAllClipInfo(std::string& clipInfo);
 
 namespace EditorUI
 {
@@ -153,6 +154,11 @@ namespace EditorUI
 			ImGui_ImplWin32_NewFrame();
 
 			ImGui::NewFrame();
+
+			if (Window::GetSingleton()->GetShouldDraw()) {
+				animationInfo.clear();
+				GetAllClipInfo(animationInfo);
+			}
 
 			Window::GetSingleton()->Draw();
 
