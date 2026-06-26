@@ -11,6 +11,8 @@
 #include <Hooks.h>
 #include <Utils.h>
 #include <Globals.h>
+#include <unordered_set>
+#include <vector>
 
 // https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
 EditorUI::Hotkey editorHotkey;  // Store the current hotkey
@@ -63,6 +65,19 @@ namespace EditorUI
 	static bool tempRevertOnFastEquip = false;
 	static bool tempRevertOnUnequip = false;
 	static bool tempRevertOnGunDown = false;
+	static int tempPriority = 0;
+
+	struct JsonFormChoice
+	{
+		std::string label;
+		std::string key;
+	};
+
+	static std::vector<JsonFormChoice> weaponJsonChoices;
+	static std::vector<JsonFormChoice> matchJsonChoices;
+	static int selectedWeaponJsonChoice = 0;
+	static int selectedMatchJsonChoice = 0;
+	static bool jsonShellChoicesDirty = true;
 
 	void SyncValues()
 	{
@@ -81,6 +96,170 @@ namespace EditorUI
 			tempRevertOnFastEquip = Configs::adjustment->GetAdjustmentFlag(Configs::REVERT_FLAG::kRevertOnFastEquip);
 			tempRevertOnUnequip = Configs::adjustment->GetAdjustmentFlag(Configs::REVERT_FLAG::kRevertOnUnequip);
 			tempRevertOnGunDown = Configs::adjustment->GetAdjustmentFlag(Configs::REVERT_FLAG::kRevertOnGunDown);
+			tempPriority = Configs::adjustment->priority;
+		}
+	}
+
+	RE::TESObjectWEAP* GetEquippedWeapon(RE::BGSInventoryItem** inventoryItem = nullptr)
+	{
+		if (!Globals::p || !Globals::p->inventoryList) {
+			return nullptr;
+		}
+
+		for (auto& invItem : Globals::p->inventoryList->data) {
+			if (invItem.object &&
+				invItem.object->formType == RE::ENUM_FORM_ID::kWEAP &&
+				invItem.stackData &&
+				invItem.stackData->IsEquipped()) {
+				if (inventoryItem) {
+					*inventoryItem = std::addressof(invItem);
+				}
+				return static_cast<RE::TESObjectWEAP*>(invItem.object);
+			}
+		}
+
+		return nullptr;
+	}
+
+	const RE::TESFile* GetFormFile(RE::TESForm* form)
+	{
+		return form ? form->GetFile(0) : nullptr;
+	}
+
+	std::string FormatLocalFormID(RE::TESForm* form)
+	{
+		if (!form) {
+			return {};
+		}
+
+		return std::format("0x{:X}", form->GetLocalFormID());
+	}
+
+	std::string BuildJsonFormKey(RE::TESForm* form)
+	{
+		const auto* file = GetFormFile(form);
+		if (!file || !file->filename[0]) {
+			return {};
+		}
+
+		return std::format("{}|{}", file->filename, FormatLocalFormID(form));
+	}
+
+	std::string BuildWildcardJsonFormKey(RE::TESForm* form)
+	{
+		const auto* file = GetFormFile(form);
+		if (!file || !file->filename[0]) {
+			return {};
+		}
+
+		return std::format("{}|*", file->filename);
+	}
+
+	std::string GetFormDisplayName(RE::TESForm* form)
+	{
+		if (!form) {
+			return {};
+		}
+
+		if (const auto* editorID = form->GetFormEditorID(); editorID && editorID[0]) {
+			return editorID;
+		}
+
+		return form->GetFormTypeString();
+	}
+
+	void AddFormChoice(
+		std::vector<JsonFormChoice>& choices,
+		std::unordered_set<std::uint32_t>& seen,
+		const char* type,
+		RE::TESForm* form)
+	{
+		if (!form || !seen.insert(form->formID).second) {
+			return;
+		}
+
+		const auto key = BuildJsonFormKey(form);
+		if (key.empty()) {
+			return;
+		}
+
+		choices.push_back({
+			std::format("{}: {} ({})", type, GetFormDisplayName(form), key),
+			key,
+		});
+	}
+
+	void RebuildJsonShellChoices()
+	{
+		RE::BGSInventoryItem* invItem = nullptr;
+		auto* wep = GetEquippedWeapon(std::addressof(invItem));
+
+		weaponJsonChoices.clear();
+		matchJsonChoices.clear();
+
+		if (!wep) {
+			selectedWeaponJsonChoice = 0;
+			selectedMatchJsonChoice = 0;
+			return;
+		}
+
+		if (const auto key = BuildJsonFormKey(wep); !key.empty()) {
+			weaponJsonChoices.push_back({
+				std::format("Current Equipped: {} ({})", GetFormDisplayName(wep), key),
+				key,
+			});
+		}
+
+		if (const auto key = BuildWildcardJsonFormKey(wep); !key.empty()) {
+			weaponJsonChoices.push_back({
+				std::format("Wildcard: {}", key),
+				key,
+			});
+		}
+
+		std::unordered_set<std::uint32_t> seenMatchForms;
+		if (wep->keywords) {
+			for (std::uint32_t keywordIdx = 0; keywordIdx < wep->numKeywords; ++keywordIdx) {
+				AddFormChoice(matchJsonChoices, seenMatchForms, "Base KYWD", wep->keywords[keywordIdx]);
+			}
+		}
+
+		auto* instanceData = invItem ? static_cast<RE::TESObjectWEAP::InstanceData*>(invItem->GetInstanceData(0)) : nullptr;
+		if (instanceData && instanceData->keywords) {
+			for (std::uint32_t keywordIdx = 0; keywordIdx < instanceData->keywords->numKeywords; ++keywordIdx) {
+				AddFormChoice(matchJsonChoices, seenMatchForms, "Instance KYWD", instanceData->keywords->keywords[keywordIdx]);
+			}
+		}
+
+		if (invItem && invItem->stackData && invItem->stackData->extra) {
+			auto* extraData = static_cast<RE::BGSObjectInstanceExtra*>(
+				invItem->stackData->extra->GetByType(RE::EXTRA_DATA_TYPE::kObjectInstance));
+			if (extraData && extraData->values && extraData->values->buffer) {
+				const auto buf = reinterpret_cast<std::uintptr_t>(extraData->values->buffer);
+				for (std::uint32_t i = 0; i < extraData->values->size / 0x8; ++i) {
+					const auto omodFormID = *reinterpret_cast<std::uint32_t*>(buf + i * 0x8);
+					auto* omod = RE::TESForm::GetFormByID(omodFormID);
+					if (omod && omod->formType == RE::ENUM_FORM_ID::kOMOD) {
+						AddFormChoice(matchJsonChoices, seenMatchForms, "OMOD", omod);
+					}
+				}
+			}
+		}
+
+		if (selectedWeaponJsonChoice >= static_cast<int>(weaponJsonChoices.size())) {
+			selectedWeaponJsonChoice = 0;
+		}
+		if (selectedMatchJsonChoice >= static_cast<int>(matchJsonChoices.size())) {
+			selectedMatchJsonChoice = 0;
+		}
+
+		jsonShellChoicesDirty = false;
+	}
+
+	void RefreshJsonShellChoices()
+	{
+		if (jsonShellChoicesDirty) {
+			RebuildJsonShellChoices();
 		}
 	}
 
@@ -388,6 +567,7 @@ namespace EditorUI
 				Configs::adjustment = &Configs::adjustDataMap.at(0xFFFFFFFF).at(0xFFFFFFFF);
 			}
 			SyncValues();
+			jsonShellChoicesDirty = true;
 		}
 		this->shouldDraw = wantDraw;
 	}
@@ -429,6 +609,9 @@ namespace EditorUI
 		if (Configs::adjustment->rotation.z != 0)
 			jsonSnippet["rotZ"] = Configs::adjustment->rotation.z / Configs::toRad;
 
+		if (Configs::adjustment->priority != 0)
+			jsonSnippet["Priority"] = Configs::adjustment->priority;
+
 		if (Configs::adjustment->GetAdjustmentFlag(Configs::REVERT_FLAG::kRevertOnReload))
 			jsonSnippet["RevertOnReload"] = Configs::adjustment->GetAdjustmentFlag(Configs::REVERT_FLAG::kRevertOnReload);
 		if (Configs::adjustment->GetAdjustmentFlag(Configs::REVERT_FLAG::kRevertOnMelee))
@@ -445,6 +628,12 @@ namespace EditorUI
 			jsonSnippet["RevertOnUnequip"] = Configs::adjustment->GetAdjustmentFlag(Configs::REVERT_FLAG::kRevertOnUnequip);
 		if (Configs::adjustment->GetAdjustmentFlag(Configs::REVERT_FLAG::kRevertOnGunDown))
 			jsonSnippet["RevertOnGunDown"] = Configs::adjustment->GetAdjustmentFlag(Configs::REVERT_FLAG::kRevertOnGunDown);
+
+		if (!weaponJsonChoices.empty() && !matchJsonChoices.empty()) {
+			nlohmann::json wrappedSnippet;
+			wrappedSnippet[weaponJsonChoices[selectedWeaponJsonChoice].key][matchJsonChoices[selectedMatchJsonChoice].key] = jsonSnippet;
+			return wrappedSnippet.dump(6);
+		}
 
 		// Convert the JSON object to a formatted string
 		std::string jsonString = jsonSnippet.dump(6);  // 4 is for pretty-printing with indentation
@@ -529,7 +718,37 @@ namespace EditorUI
 			}
 
 			SyncValues();
+			jsonShellChoicesDirty = true;
 			Hooks::shouldAdjust = true;
+		}
+
+		RefreshJsonShellChoices();
+		const auto weaponPreview = weaponJsonChoices.empty() ? "No equipped weapon" : weaponJsonChoices[selectedWeaponJsonChoice].label.c_str();
+		if (ImGui::BeginCombo("JSON Weapon", weaponPreview)) {
+			for (int i = 0; i < static_cast<int>(weaponJsonChoices.size()); ++i) {
+				const bool selected = selectedWeaponJsonChoice == i;
+				if (ImGui::Selectable(weaponJsonChoices[i].label.c_str(), selected)) {
+					selectedWeaponJsonChoice = i;
+				}
+				if (selected) {
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
+		}
+
+		const auto matchPreview = matchJsonChoices.empty() ? "No keyword or OMOD" : matchJsonChoices[selectedMatchJsonChoice].label.c_str();
+		if (ImGui::BeginCombo("JSON Match", matchPreview)) {
+			for (int i = 0; i < static_cast<int>(matchJsonChoices.size()); ++i) {
+				const bool selected = selectedMatchJsonChoice == i;
+				if (ImGui::Selectable(matchJsonChoices[i].label.c_str(), selected)) {
+					selectedMatchJsonChoice = i;
+				}
+				if (selected) {
+					ImGui::SetItemDefaultFocus();
+				}
+			}
+			ImGui::EndCombo();
 		}
 
 		const static float minTrans = -200.f;
@@ -591,6 +810,10 @@ namespace EditorUI
 				Configs::adjustment->SetAdjustmentFlag(Configs::REVERT_FLAG::kRevertOnGunDown, tempRevertOnGunDown);
 			}
 			ImGui::EndCombo();
+		}
+
+		if (ImGui::InputInt("Priority", &tempPriority)) {
+			Configs::adjustment->priority = tempPriority;
 		}
 
 		ImGui::SeparatorText("Quality of Life");
