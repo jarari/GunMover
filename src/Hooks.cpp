@@ -25,6 +25,20 @@ std::string clipName;
 std::string animationInfo;
 RE::NiPoint3 adjustDiff;
 
+namespace RE
+{
+	class EquipEventSource :
+		public RE::BSTEventSource<RE::TESEquipEvent>
+	{
+	public:
+		[[nodiscard]] static EquipEventSource* GetSingleton()
+		{
+			REL::Relocation<EquipEventSource*> singleton{ REL::ID{ 485633, 2691240, 4798533 } };
+			return singleton.get();
+		}
+	};
+}
+
 void Hooks::InitializeHooks()
 {
 	animationInfo.reserve(1024);
@@ -41,6 +55,8 @@ void Hooks::InitializeHooks()
 
 namespace RE
 {
+	class hkbClipGenerator;
+
 	struct hkbBehaviorGraph
 	{
 		struct NodeData
@@ -83,10 +99,11 @@ void GetClipInfo(float& _currentTime, float& _duration, std::string& _clipName) 
 			RE::BShkbAnimationGraph* graph = graphManager->variableCache.graphToCacheFor.get();
 			if (graph) {
 				RE::hkbBehaviorGraph* hkGraph = *(RE::hkbBehaviorGraph**)((uintptr_t)graph + 0x378);
-				if (hkGraph->activeNodes && hkGraph->activeNodes->_size > 0 && !hkGraph->updateActiveNodes && !hkGraph->stateOrTransitionChanged) {
-					for (int i = 0; i < hkGraph->activeNodes->_size; ++i) {
-						if (hkGraph->activeNodes->_data[i]->clipGenerator2 && (*(uintptr_t*)hkGraph->activeNodes->_data[i]->clipGenerator2) == RE::VTABLE::hkbClipGenerator[0].address()) {
-							uintptr_t clip = (uintptr_t)(hkGraph->activeNodes->_data[i]->clipGenerator2);
+				if (hkGraph->activeNodes && hkGraph->activeNodes->size() > 0 && !hkGraph->updateActiveNodes && !hkGraph->stateOrTransitionChanged) {
+					for (int i = 0; i < hkGraph->activeNodes->size(); ++i) {
+						auto* node = (*hkGraph->activeNodes)[i];
+						if (node->clipGenerator2 && (*(uintptr_t*)node->clipGenerator2) == RE::VTABLE::hkbClipGenerator[0].address()) {
+							uintptr_t clip = (uintptr_t)(node->clipGenerator2);
 							uintptr_t animCtrl = *(uintptr_t*)(clip + 0xD0);
 							if (animCtrl) {
 								uintptr_t animBinding = *(uintptr_t*)(animCtrl + 0x38);
@@ -111,10 +128,11 @@ void GetAllClipInfo(std::string& clipInfo)
 			RE::BShkbAnimationGraph* graph = graphManager->variableCache.graphToCacheFor.get();
 			if (graph) {
 				RE::hkbBehaviorGraph* hkGraph = *(RE::hkbBehaviorGraph**)((uintptr_t)graph + 0x378);
-				if (hkGraph->activeNodes && hkGraph->activeNodes->_size > 0 && !hkGraph->updateActiveNodes && !hkGraph->stateOrTransitionChanged) {
-					for (int i = 0; i < hkGraph->activeNodes->_size; ++i) {
-						if (hkGraph->activeNodes->_data[i]->clipGenerator && (*(uintptr_t*)hkGraph->activeNodes->_data[i]->clipGenerator) == RE::VTABLE::hkbClipGenerator[0].address()) {
-							uintptr_t clip = (uintptr_t)(hkGraph->activeNodes->_data[i]->clipGenerator);
+				if (hkGraph->activeNodes && hkGraph->activeNodes->size() > 0 && !hkGraph->updateActiveNodes && !hkGraph->stateOrTransitionChanged) {
+					for (int i = 0; i < hkGraph->activeNodes->size(); ++i) {
+						auto* node = (*hkGraph->activeNodes)[i];
+						if (node->clipGenerator && (*(uintptr_t*)node->clipGenerator) == RE::VTABLE::hkbClipGenerator[0].address()) {
+							uintptr_t clip = (uintptr_t)(node->clipGenerator);
 							clipInfo.append("Clip: ");
 							clipInfo.append(*(const char**)(clip + 0x38));
 							clipInfo.append("\n");

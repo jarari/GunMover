@@ -15,37 +15,37 @@ namespace Utils
 	}
 	inline void SetMatrix33(float a, float b, float c, float d, float e, float f, float g, float h, float i, RE::NiMatrix3& mat)
 	{
-		mat.entry[0].pt[0] = a;
-		mat.entry[0].pt[1] = b;
-		mat.entry[0].pt[2] = c;
-		mat.entry[1].pt[0] = d;
-		mat.entry[1].pt[1] = e;
-		mat.entry[1].pt[2] = f;
-		mat.entry[2].pt[0] = g;
-		mat.entry[2].pt[1] = h;
-		mat.entry[2].pt[2] = i;
+		mat[0][0] = a;
+		mat[0][1] = b;
+		mat[0][2] = c;
+		mat[1][0] = d;
+		mat[1][1] = e;
+		mat[1][2] = f;
+		mat[2][0] = g;
+		mat[2][1] = h;
+		mat[2][2] = i;
 	}
 	//Sarrus rule
 	inline float Determinant(RE::NiMatrix3 mat)
 	{
-		return mat.entry[0].pt[0] * mat.entry[1].pt[1] * mat.entry[2].pt[2] + mat.entry[0].pt[1] * mat.entry[1].pt[2] * mat.entry[2].pt[0] + mat.entry[0].pt[2] * mat.entry[1].pt[0] * mat.entry[2].pt[1] - mat.entry[0].pt[2] * mat.entry[1].pt[1] * mat.entry[2].pt[0] - mat.entry[0].pt[1] * mat.entry[1].pt[0] * mat.entry[2].pt[2] - mat.entry[0].pt[0] * mat.entry[1].pt[2] * mat.entry[2].pt[1];
+		return mat[0][0] * mat[1][1] * mat[2][2] + mat[0][1] * mat[1][2] * mat[2][0] + mat[0][2] * mat[1][0] * mat[2][1] - mat[0][2] * mat[1][1] * mat[2][0] - mat[0][1] * mat[1][0] * mat[2][2] - mat[0][0] * mat[1][2] * mat[2][1];
 	}
 
 	RE::NiMatrix3 Inverse(RE::NiMatrix3);
 
 	inline RE::NiPoint3 ToDirectionVector(RE::NiMatrix3 mat)
 	{
-		return RE::NiPoint3(mat.entry[2].pt[0], mat.entry[2].pt[1], mat.entry[2].pt[2]);
+		return RE::NiPoint3(mat[2][0], mat[2][1], mat[2][2]);
 	}
 
 	inline RE::NiPoint3 ToUpVector(RE::NiMatrix3 mat)
 	{
-		return RE::NiPoint3(mat.entry[1].pt[0], mat.entry[1].pt[1], mat.entry[1].pt[2]);
+		return RE::NiPoint3(mat[1][0], mat[1][1], mat[1][2]);
 	}
 
 	inline RE::NiPoint3 ToRightVector(RE::NiMatrix3 mat)
 	{
-		return RE::NiPoint3(mat.entry[0].pt[0], mat.entry[0].pt[1], mat.entry[0].pt[2]);
+		return RE::NiPoint3(mat[0][0], mat[0][1], mat[0][2]);
 	}
 
 	inline float easeInOutQuad(float t)

@@ -28,8 +28,7 @@ namespace EditorUI
 	Window* Window::instance = nullptr;
 
 	// Hook variables
-	REL::Relocation<uintptr_t> ptr_D3D11CreateDeviceAndSwapChainCall{ REL::ID(224250), 0x419 };
-	REL::Relocation<uintptr_t> ptr_D3D11CreateDeviceAndSwapChain{ REL::ID(254484) };
+	const REL::ID D3D11CreateDeviceAndSwapChainCall{ 224250, 4492363 };
 	typedef HRESULT (*FnD3D11CreateDeviceAndSwapChain)(IDXGIAdapter*,
 		D3D_DRIVER_TYPE,
 		HMODULE, UINT,
@@ -44,7 +43,7 @@ namespace EditorUI
 	FnD3D11CreateDeviceAndSwapChain D3D11CreateDeviceAndSwapChain_Orig;
 	typedef HRESULT (*FnD3D11Present)(IDXGISwapChain*, UINT, UINT);
 	FnD3D11Present D3D11Present_Orig;
-	REL::Relocation<uintptr_t> ptr_ClipCursor{ REL::ID(641385) };
+	REL::Relocation<uintptr_t> ptr_ClipCursor{ REL::ID{ 641385, 4823626 } };
 	typedef BOOL (*FnClipCursor)(const RECT*);
 	FnClipCursor ClipCursor_Orig;
 	WNDPROC WndProc_Orig;
@@ -205,12 +204,17 @@ namespace EditorUI
 	void HookD3D11()
 	{
 		logger::warn("Hooking D3D11CreateDeviceAndSwapChain");
-		F4SE::Trampoline& trampoline = F4SE::GetTrampoline();
-		D3D11CreateDeviceAndSwapChain_Orig = (FnD3D11CreateDeviceAndSwapChain)trampoline.write_call<5>(ptr_D3D11CreateDeviceAndSwapChainCall.address(), &HookedD3D11CreateDeviceAndSwapChain);
+		auto& trampoline = REL::GetTrampoline();
+		const auto isOG = REX::FModule::IsRuntimeOG();
+		const auto target = D3D11CreateDeviceAndSwapChainCall.address() + (isOG ? 0x419 : 0x410);
+		D3D11CreateDeviceAndSwapChain_Orig = (FnD3D11CreateDeviceAndSwapChain)trampoline.write_call<5>(target, &HookedD3D11CreateDeviceAndSwapChain);
 
 		ClipCursor_Orig = *(FnClipCursor*)ptr_ClipCursor.address();
 		ptr_ClipCursor.write_vfunc(0, &HookedClipCursor);
-		logger::warn("CreateDevice {:p} ClipCursor {:p}", fmt::ptr(D3D11CreateDeviceAndSwapChain_Orig), fmt::ptr(ClipCursor_Orig));
+		logger::warn(
+			"CreateDevice {:p} ClipCursor {:p}",
+			reinterpret_cast<const void*>(D3D11CreateDeviceAndSwapChain_Orig),
+			reinterpret_cast<const void*>(ClipCursor_Orig));
 	}
 
 	void Hotkey::SaveHotkeyToIni()

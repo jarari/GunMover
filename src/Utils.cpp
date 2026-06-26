@@ -1,6 +1,6 @@
 #include "Utils.h"
 
-REL::Relocation<float*> Utils::ptr_deltaTime{ REL::ID(1013228) };
+REL::Relocation<float*> Utils::ptr_deltaTime{ REL::ID{ 1013228, 2703182 } };
 
 RE::TESForm* Utils::GetFormFromMod(std::string modname, uint32_t formid)
 {
@@ -47,7 +47,7 @@ RE::NiMatrix3 Utils::GetRotationMatrix33(float a_pitch, float a_yaw, float a_rol
 bool Utils::GetTimesForClipFromEventOnActor(RE::NiPointer<RE::Actor>& a_actor, RE::BSFixedString const& a_evn, float& a_timeLeft, float& a_time)
 {
 	using func_t = decltype(Utils::GetTimesForClipFromEventOnActor);
-	REL::Relocation<func_t> func{ REL::ID(238515) };
+	REL::Relocation<func_t> func{ REL::ID { 238515, 2237282 } };
 	return (*func)(a_actor, a_evn, a_timeLeft, a_time);
 }
 
@@ -59,15 +59,15 @@ RE::NiMatrix3 Utils::Inverse(RE::NiMatrix3 mat)
 		idmat.MakeIdentity();
 		return idmat;
 	}
-	float a = mat.entry[0].pt[0];
-	float b = mat.entry[0].pt[1];
-	float c = mat.entry[0].pt[2];
-	float d = mat.entry[1].pt[0];
-	float e = mat.entry[1].pt[1];
-	float f = mat.entry[1].pt[2];
-	float g = mat.entry[2].pt[0];
-	float h = mat.entry[2].pt[1];
-	float i = mat.entry[2].pt[2];
+	float a = mat[0][0];
+	float b = mat[0][1];
+	float c = mat[0][2];
+	float d = mat[1][0];
+	float e = mat[1][1];
+	float f = mat[1][2];
+	float g = mat[2][0];
+	float h = mat[2][1];
+	float i = mat[2][2];
 	RE::NiMatrix3 invmat;
 	SetMatrix33(e * i - f * h, -(b * i - c * h), b * f - c * e,
 		-(d * i - f * g), a * i - c * g, -(a * f - c * d),
